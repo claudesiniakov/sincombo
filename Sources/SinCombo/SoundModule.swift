@@ -254,7 +254,7 @@ struct SoundModuleView: View {
                 .disabled(model.volume == nil)
                 .accessibilityLabel("Громкость")
                 Text(model.volume.map { "\(Int(($0 * 100).rounded())) %" } ?? "—")
-                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    .font(.caption).monospacedDigit().foregroundStyle(Color.primary.opacity(0.75))
                     .frame(width: 38, alignment: .trailing)
             }
             if model.volume == nil, model.output != nil {
@@ -267,7 +267,6 @@ struct SoundModuleView: View {
                         IconDot(symbol: device.symbol, active: device.id == model.output)
                         Text(device.name).lineLimit(1)
                         Spacer(minLength: 0)
-                        if device.id == model.output { Image(systemName: "checkmark").font(.caption) }
                     }
                 }
             }
@@ -278,7 +277,6 @@ struct SoundModuleView: View {
                         IconDot(symbol: "mic", active: device.id == model.input)
                         Text(device.name).lineLimit(1)
                         Spacer(minLength: 0)
-                        if device.id == model.input { Image(systemName: "checkmark").font(.caption) }
                     }
                 }
                 if let level = model.inputVolume {
@@ -291,7 +289,7 @@ struct SoundModuleView: View {
                         .controlSize(.small)
                         .accessibilityLabel("Уровень микрофона")
                         Text("\(Int((level * 100).rounded())) %")
-                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                            .font(.caption).monospacedDigit().foregroundStyle(Color.primary.opacity(0.75))
                             .frame(width: 38, alignment: .trailing)
                     }
                 }

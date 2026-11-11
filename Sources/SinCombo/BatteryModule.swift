@@ -91,7 +91,7 @@ struct BatteryModuleView: View {
     var body: some View {
         if let state = app.battery.state {
             ModuleSection(id: .battery) {
-                Text("\(state.percent) %").font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                Text("\(state.percent) %").font(.callout).monospacedDigit().foregroundStyle(Color.primary.opacity(0.75))
             } content: {
                 Meter(fraction: Double(state.percent) / 100, warn: state.percent <= 20 && !state.charging)
                     .accessibilityLabel("Заряд \(state.percent) %")

@@ -1,21 +1,28 @@
 import SwiftUI
 import SinComboCore
 
-private struct HeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+private struct FrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
 }
 
 /// Выпадающая панель: включённые модули в порядке из настроек и нижняя строка.
 struct PanelView: View {
     @Environment(AppState.self) private var app
     @State private var contentHeight: CGFloat = 420
+    @State private var scrolled: CGFloat = 0
 
     private var maxHeight: CGFloat {
         max(300, (NSScreen.main?.visibleFrame.height ?? 800) - 24)
     }
 
     var body: some View {
+        let height = min(max(contentHeight, 60), maxHeight)
+        // Ниже видимой части есть ещё содержимое.
+        let hasMore = contentHeight - scrolled - height > 12
         ScrollView(.vertical) {
             VStack(spacing: 8) {
                 ForEach(app.prefs.layout.visible) { id in
@@ -25,11 +32,34 @@ struct PanelView: View {
             }
             .padding(8)
             .background(GeometryReader { proxy in
-                Color.clear.preference(key: HeightKey.self, value: proxy.size.height)
+                Color.clear.preference(key: FrameKey.self, value: proxy.frame(in: .named("panel")))
             })
         }
-        .onPreferenceChange(HeightKey.self) { contentHeight = $0 }
-        .frame(width: 320, height: min(max(contentHeight, 60), maxHeight))
+        .coordinateSpace(name: "panel")
+        .scrollIndicatorsFlash(onAppear: true)
+        .onPreferenceChange(FrameKey.self) { frame in
+            if abs(contentHeight - frame.height) > 0.5 { contentHeight = frame.height }
+            let offset = max(0, -frame.minY)
+            if abs(scrolled - offset) > 2 { scrolled = offset }
+        }
+        .frame(width: 320, height: height)
+        .overlay(alignment: .bottom) {
+            if hasMore {
+                ZStack(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [Color(nsColor: .windowBackgroundColor).opacity(0), Color(nsColor: .windowBackgroundColor).opacity(0.92)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    Image(systemName: "chevron.compact.down")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 3)
+                }
+                .frame(height: 34)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
         .onAppear { app.panelOpen = true }
         .onDisappear { app.panelOpen = false }
     }
@@ -84,6 +114,8 @@ struct PanelView: View {
 struct ModuleSection<Accessory: View, Content: View>: View {
     @Environment(AppState.self) private var app
     let id: ModuleID
+    /// Заголовок вместо названия модуля (у календаря — месяц и год).
+    var title: String? = nil
     @ViewBuilder let accessory: () -> Accessory
     @ViewBuilder let content: () -> Content
 
@@ -94,12 +126,12 @@ struct ModuleSection<Accessory: View, Content: View>: View {
                 Button { app.prefs.toggleCollapsed(id) } label: {
                     HStack(spacing: 8) {
                         Image(systemName: id.symbol).frame(width: 18)
-                        Text(id.title).fontWeight(.semibold)
-                        Spacer(minLength: 0)
+                        Text(title ?? id.title).fontWeight(.semibold).lineLimit(1)
                         Image(systemName: "chevron.down")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .rotationEffect(.degrees(collapsed ? -90 : 0))
+                        Spacer(minLength: 0)
                     }
                     .contentShape(Rectangle())
                 }

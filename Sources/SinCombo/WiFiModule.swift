@@ -239,14 +239,13 @@ struct WiFiModuleView: View {
             Spacer(minLength: 0)
             if model.busy == network.ssid {
                 ProgressView().controlSize(.mini)
-            } else if isCurrent {
-                Image(systemName: "checkmark").font(.caption)
             }
             if network.secured {
-                Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.secondary)
+                Image(systemName: "lock.fill").font(.caption2).foregroundStyle(Color.primary.opacity(0.65))
             }
             Image(systemName: "wifi", variableValue: Double(WiFiLogic.bars(rssi: network.rssi)) / 4)
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.callout).foregroundStyle(.primary)
+                .accessibilityLabel("Сигнал \(WiFiLogic.bars(rssi: network.rssi)) из 4")
         }
         if model.passwordFor == network.ssid {
             HStack(spacing: 6) {

@@ -328,8 +328,6 @@ struct VPNModuleView: View {
                 HStack(spacing: 5) {
                     if state.isBusy {
                         ProgressView().controlSize(.mini)
-                    } else if state == .on {
-                        Circle().fill(Color.green).frame(width: 7, height: 7)
                     } else if state == .failed {
                         Circle().fill(Color.red).frame(width: 7, height: 7)
                     }

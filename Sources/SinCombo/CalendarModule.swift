@@ -266,10 +266,13 @@ struct CalendarModuleView: View {
     }()
 
     var body: some View {
-        ModuleSection(id: .calendar) {
-            EmptyView()
+        // Месяц и год стоят в заголовке блока: отдельная строка под ним дублировала заголовок.
+        ModuleSection(
+            id: .calendar,
+            title: Self.monthTitle.string(from: model.month).capitalized(with: .autoupdatingCurrent)
+        ) {
+            if !prefs.collapsed.contains(.calendar) { navigation }
         } content: {
-            header
             grid
             if showEvents {
                 if model.access == .denied {
@@ -285,11 +288,8 @@ struct CalendarModuleView: View {
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 4) {
-            Text(Self.monthTitle.string(from: model.month).capitalized(with: .autoupdatingCurrent))
-                .fontWeight(.semibold)
-            Spacer(minLength: 0)
+    private var navigation: some View {
+        HStack(spacing: 2) {
             Button("Сегодня") { model.goToday() }.buttonStyle(.link).font(.callout)
             Button { model.shiftMonth(-1) } label: { Image(systemName: "chevron.left").frame(width: 22, height: 22) }
                 .buttonStyle(.plain).accessibilityLabel("Предыдущий месяц")
@@ -339,17 +339,18 @@ struct CalendarModuleView: View {
                     .background(Circle().fill(isToday ? Color.accentColor : Color.clear))
                 HStack(spacing: 2) {
                     ForEach(Array(dots.enumerated()), id: \.offset) { _, color in
-                        Circle().fill(color).frame(width: 4, height: 4)
+                        Circle().fill(color).frame(width: 5, height: 5)
                     }
                 }
-                .frame(height: 4)
+                .frame(height: 5)
             }
             .padding(.vertical, 2)
             .frame(maxWidth: .infinity)
             .opacity(day.inMonth ? 1 : 0.4)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.accentColor, lineWidth: isSelected ? 1.5 : 0)
+                    // Сегодняшний день уже выделен кругом; рамка нужна только другому выбранному дню.
+                    .strokeBorder(Color.accentColor, lineWidth: isSelected && !isToday ? 1.5 : 0)
             )
             .contentShape(Rectangle())
         }
@@ -369,7 +370,10 @@ struct CalendarModuleView: View {
         let isToday = model.calendar.isDate(model.selected, inSameDayAs: model.today)
         let list = model.events(on: model.selected, includeAllDay: prefs.isOn(.calAllDay))
         HStack {
-            SubTitle((isToday ? "Сегодня, " : "") + Self.dayTitle.string(from: model.selected))
+            SubTitle(
+                (isToday ? "Сегодня, " : "") + Self.dayTitle.string(from: model.selected)
+                    + (list.isEmpty && model.access == .granted && !adding ? " — событий нет" : "")
+            )
             Spacer(minLength: 0)
             if model.access == .granted {
                 Button { toggleForm() } label: { Image(systemName: adding ? "xmark" : "plus").frame(width: 22, height: 22) }
@@ -378,8 +382,8 @@ struct CalendarModuleView: View {
             }
         }
         if adding { form }
-        if list.isEmpty {
-            Hint(model.access == .granted ? "Событий нет" : "Запрашиваем доступ к календарям…")
+        if list.isEmpty, model.access != .granted {
+            Hint("Запрашиваем доступ к календарям…")
         }
         ForEach(list) { event in
             let past = isToday && !event.allDay && event.end <= Date()
