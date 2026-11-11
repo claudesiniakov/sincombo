@@ -157,6 +157,8 @@ struct SettingsView: View {
                 }
             }
             Button("Добавить подписку…") { adding = true }
+        case .awake:
+            toggle(.awakeDisplay)
         }
     }
 
@@ -182,6 +184,7 @@ struct SettingsView: View {
                 }
                 Toggle("Значок VPN в строке меню", isOn: $prefs.barVPN)
                 Toggle("Значок аккумулятора в строке меню", isOn: $prefs.barBattery)
+                Toggle("Значок чашки, пока включено «Не засыпать»", isOn: $prefs.barAwake)
             }
             Section {
                 Button("Сбросить настройки") { prefs.reset() }
@@ -201,7 +204,7 @@ struct SettingsView: View {
                     Image(nsImage: MenuBarArt.gears(side: 44))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("SinCombo \(app.updater.currentVersionString)").font(.headline)
-                        Text("Wi-Fi, Bluetooth, звук, календарь, VPN, аккумулятор и подписки в одной панели")
+                        Text("Wi-Fi, Bluetooth, звук, календарь, VPN, аккумулятор, подписки и запрет сна в одной панели")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                 }

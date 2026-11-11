@@ -52,6 +52,7 @@ final class AppState {
     let battery = BatteryModel()
     let vpn = VPNModel()
     let subs = SubsModel()
+    let awake = AwakeModel()
 
     private(set) var launchAtLogin = LoginItem.isEnabled
     /// Меняется раз в минуту, чтобы текст в строке меню не устаревал.
@@ -127,6 +128,8 @@ final class AppState {
             await vpn.tick()
         }
 
+        awake.tick(keepDisplay: prefs.isOn(.awakeDisplay))
+
         seconds += 1
         if panelOpen {
             if seconds % 3 == 0 { refreshModules(first: false) }
@@ -200,7 +203,9 @@ final class AppState {
         }
         var batteryBadge: (Int, Bool)?
         if prefs.barBattery, let state = battery.state { batteryBadge = (state.percent, state.charging) }
-        return MenuBarArt.image(vpn: vpnBadge, battery: batteryBadge, text: barString)
+        return MenuBarArt.image(
+            vpn: vpnBadge, battery: batteryBadge, awake: prefs.barAwake && awake.active, text: barString
+        )
     }
 
     // MARK: - Прочее
@@ -232,8 +237,8 @@ enum MenuBarArt {
     @MainActor private static var cache: [String: NSImage] = [:]
 
     @MainActor
-    static func image(vpn: VPNBadge?, battery: (Int, Bool)?, text: String?) -> NSImage {
-        let key = "\(vpn?.rawValue ?? "-")|\(battery.map { "\($0.0)\($0.1)" } ?? "-")|\(text ?? "")"
+    static func image(vpn: VPNBadge?, battery: (Int, Bool)?, awake: Bool, text: String?) -> NSImage {
+        let key = "\(awake)|\(vpn?.rawValue ?? "-")|\(battery.map { "\($0.0)\($0.1)" } ?? "-")|\(text ?? "")"
         if let cached = cache[key] { return cached }
         if cache.count > 200 { cache.removeAll() }
 
@@ -248,6 +253,7 @@ enum MenuBarArt {
         var width: CGFloat = height
         if vpn != nil { width += gap + 28 }
         if battery != nil { width += gap + (battery?.1 == true ? 33 : 26) }
+        if awake { width += gap + 17 }
         if let label { width += gap + ceil(label.size().width) }
 
         let image = NSImage(size: NSSize(width: width, height: height), flipped: true) { _ in
@@ -262,6 +268,22 @@ enum MenuBarArt {
             if let battery {
                 x += gap
                 x += drawBattery(percent: battery.0, charging: battery.1, at: NSPoint(x: x, y: 3.5))
+            }
+            if awake {
+                x += gap
+                // Чашка: «Не засыпать» включено.
+                let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+                if let cup = NSImage(systemSymbolName: "cup.and.saucer.fill", accessibilityDescription: nil)?
+                    .withSymbolConfiguration(config) {
+                    let size = cup.size
+                    let scale = min(17 / max(size.width, 1), 14 / max(size.height, 1), 1)
+                    let w = size.width * scale, h = size.height * scale
+                    cup.draw(
+                        in: NSRect(x: x + (17 - w) / 2, y: (height - h) / 2, width: w, height: h),
+                        from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil
+                    )
+                }
+                x += 17
             }
             if let label {
                 x += gap

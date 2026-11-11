@@ -16,7 +16,7 @@ final class PanelLayoutTests: XCTestCase {
     func testMove() {
         var layout = PanelLayout()
         layout.move(.subs, by: -1)
-        XCTAssertEqual(layout.order.suffix(2), [.subs, .battery])
+        XCTAssertEqual(layout.order.suffix(3), [.subs, .battery, .awake])
         layout.move(.calendar, by: -1)
         XCTAssertEqual(layout.order.first, .calendar)
         layout.move(fromOffsets: IndexSet(integer: 0), toOffset: 3)

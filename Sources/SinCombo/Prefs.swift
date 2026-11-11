@@ -10,6 +10,7 @@ enum Opt: String, CaseIterable, Codable {
     case batOnlyBar, batTime, batHealth, batSettings
     case vpnStats, vpnSettings
     case subsRenewal, subsManual, subsPeriod
+    case awakeDisplay
 
     var defaultValue: Bool {
         switch self {
@@ -42,6 +43,7 @@ enum Opt: String, CaseIterable, Codable {
         case .subsRenewal: return "Даты продления"
         case .subsManual: return "Подписки без лимитов (введённые вручную)"
         case .subsPeriod: return "Полоса до даты продления у ручных подписок"
+        case .awakeDisplay: return "Не гасить экран"
         }
     }
 }
@@ -75,6 +77,8 @@ final class Prefs {
         var barText = BarText.none.rawValue
         var barVPN = false
         var barBattery = false
+        /// Необязательное: в настройках версии 0.1.0 этого поля нет.
+        var barAwake: Bool?
         var hiddenCalendars: [String] = []
     }
 
@@ -86,6 +90,7 @@ final class Prefs {
     var barText: BarText { didSet { save() } }
     var barVPN: Bool { didSet { save() } }
     var barBattery: Bool { didSet { save() } }
+    var barAwake: Bool { didSet { save() } }
     var hiddenCalendars: Set<String> { didSet { save() } }
 
     private init() {
@@ -100,6 +105,7 @@ final class Prefs {
         barText = BarText(rawValue: stored.barText) ?? .none
         barVPN = stored.barVPN
         barBattery = stored.barBattery
+        barAwake = stored.barAwake ?? true
         hiddenCalendars = Set(stored.hiddenCalendars)
     }
 
@@ -111,6 +117,7 @@ final class Prefs {
             barText: barText.rawValue,
             barVPN: barVPN,
             barBattery: barBattery,
+            barAwake: barAwake,
             hiddenCalendars: hiddenCalendars.sorted()
         )
         if let data = try? JSONEncoder().encode(stored) {
@@ -145,6 +152,7 @@ final class Prefs {
         barText = .none
         barVPN = false
         barBattery = false
+        barAwake = true
         hiddenCalendars = []
     }
 }

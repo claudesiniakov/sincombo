@@ -43,6 +43,7 @@ struct PanelView: View {
         case .vpn: VPNModuleView()
         case .battery: BatteryModuleView()
         case .subs: SubsModuleView()
+        case .awake: AwakeModuleView()
         }
     }
 

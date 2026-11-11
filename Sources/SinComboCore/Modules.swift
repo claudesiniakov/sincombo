@@ -2,7 +2,7 @@ import Foundation
 
 /// Модули панели. Порядок случаев — порядок по умолчанию.
 public enum ModuleID: String, CaseIterable, Codable, Sendable, Identifiable {
-    case calendar, sound, wifi, bluetooth, vpn, battery, subs
+    case calendar, sound, wifi, bluetooth, vpn, battery, subs, awake
 
     public var id: String { rawValue }
 
@@ -15,6 +15,7 @@ public enum ModuleID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .vpn: return "VPN"
         case .battery: return "Аккумулятор"
         case .subs: return "Подписки"
+        case .awake: return "Не засыпать"
         }
     }
 
@@ -27,6 +28,7 @@ public enum ModuleID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .vpn: return "lock.shield"
         case .battery: return "battery.75percent"
         case .subs: return "creditcard"
+        case .awake: return "cup.and.saucer"
         }
     }
 }
