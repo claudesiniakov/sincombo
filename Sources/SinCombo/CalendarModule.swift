@@ -245,7 +245,8 @@ struct CalendarModuleView: View {
     private static let monthTitle: DateFormatter = {
         let f = DateFormatter()
         f.locale = .autoupdatingCurrent
-        f.setLocalizedDateFormatFromTemplate("LLLL yyyy")
+        // Именно так, без шаблона локали: русский шаблон дописывает «г.» после года.
+        f.dateFormat = "LLLL yyyy"
         return f
     }()
 
