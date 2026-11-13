@@ -23,6 +23,8 @@ struct PanelView: View {
         let height = min(max(contentHeight, 60), maxHeight)
         // Ниже видимой части есть ещё содержимое.
         let hasMore = contentHeight - scrolled - height > 12
+        // Выше видимой части тоже есть содержимое.
+        let hasAbove = scrolled > 12
         ScrollView(.vertical) {
             VStack(spacing: 8) {
                 ForEach(app.prefs.layout.visible) { id in
@@ -36,32 +38,41 @@ struct PanelView: View {
             })
         }
         .coordinateSpace(name: "panel")
-        .scrollIndicatorsFlash(onAppear: true)
+        // Системная полоса прокрутки прижималась к скруглённому краю панели и перекрывала поля:
+        // вместо неё о продолжении говорят затухание и стрелка у края.
+        .scrollIndicators(.hidden)
         .onPreferenceChange(FrameKey.self) { frame in
             if abs(contentHeight - frame.height) > 0.5 { contentHeight = frame.height }
             let offset = max(0, -frame.minY)
             if abs(scrolled - offset) > 2 { scrolled = offset }
         }
         .frame(width: 320, height: height)
+        .overlay(alignment: .top) {
+            if hasAbove { edgeHint(up: true) }
+        }
         .overlay(alignment: .bottom) {
-            if hasMore {
-                ZStack(alignment: .bottom) {
-                    LinearGradient(
-                        colors: [Color(nsColor: .windowBackgroundColor).opacity(0), Color(nsColor: .windowBackgroundColor).opacity(0.92)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                    Image(systemName: "chevron.compact.down")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 3)
-                }
-                .frame(height: 34)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
+            if hasMore { edgeHint(up: false) }
         }
         .onAppear { app.panelOpen = true }
         .onDisappear { app.panelOpen = false }
+    }
+
+    /// Затухание и стрелка у края панели: за ним есть ещё содержимое.
+    private func edgeHint(up: Bool) -> some View {
+        let background = Color(nsColor: .windowBackgroundColor)
+        return ZStack(alignment: up ? .top : .bottom) {
+            LinearGradient(
+                colors: [background.opacity(0), background.opacity(0.92)],
+                startPoint: up ? .bottom : .top, endPoint: up ? .top : .bottom
+            )
+            Image(systemName: up ? "chevron.compact.up" : "chevron.compact.down")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(up ? .top : .bottom, 3)
+        }
+        .frame(height: 34)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     @ViewBuilder private func module(_ id: ModuleID) -> some View {
