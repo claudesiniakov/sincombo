@@ -38,15 +38,19 @@ enum Audio {
         var address = address
         var size = UInt32(MemoryLayout<T>.size)
         var value = initial
-        let status = AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value)
+        // Явный доступ к байтам: T здесь всегда простой тип CoreAudio без ссылок на объекты.
+        let status = withUnsafeMutableBytes(of: &value) { bytes in
+            AudioObjectGetPropertyData(object, &address, 0, nil, &size, bytes.baseAddress!)
+        }
         return status == noErr ? value : nil
     }
 
     @discardableResult
     static func set<T>(_ object: AudioObjectID, _ address: AudioObjectPropertyAddress, _ value: T) -> Bool {
         var address = address
-        var value = value
-        return AudioObjectSetPropertyData(object, &address, 0, nil, UInt32(MemoryLayout<T>.size), &value) == noErr
+        return withUnsafeBytes(of: value) { bytes in
+            AudioObjectSetPropertyData(object, &address, 0, nil, UInt32(bytes.count), bytes.baseAddress!) == noErr
+        }
     }
 
     static func has(_ object: AudioObjectID, _ address: AudioObjectPropertyAddress) -> Bool {
