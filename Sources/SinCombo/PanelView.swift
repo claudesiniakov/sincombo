@@ -40,7 +40,8 @@ struct PanelView: View {
         .coordinateSpace(name: "panel")
         // Системная полоса прокрутки прижималась к скруглённому краю панели и перекрывала поля:
         // вместо неё о продолжении говорят затухание и стрелка у края.
-        .scrollIndicators(.hidden)
+        // Именно .never: при подключённой мыши .hidden полосу оставляет.
+        .scrollIndicators(.never)
         .onPreferenceChange(FrameKey.self) { frame in
             if abs(contentHeight - frame.height) > 0.5 { contentHeight = frame.height }
             let offset = max(0, -frame.minY)
