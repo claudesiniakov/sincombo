@@ -274,6 +274,7 @@ struct AddSubscriptionView: View {
     @State private var hasRenewal = true
     @State private var renewal = Date()
     @State private var period = BillingPeriod.month
+    @State private var error: String?
 
     private var defaultName: String {
         switch kind {
@@ -318,13 +319,16 @@ struct AddSubscriptionView: View {
                 }
             }
             .formStyle(.grouped)
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red).padding(.horizontal, 12)
+            }
             HStack {
                 Spacer()
                 Button("Отмена", action: close).keyboardShortcut(.cancelAction)
                 Button("Добавить") {
                     let title = name.trimmingCharacters(in: .whitespaces)
                     let amount = Double(limit.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces))
-                    app.subs.add(Subscription(
+                    let message = app.subs.add(Subscription(
                         name: title.isEmpty ? defaultName : title,
                         kind: kind,
                         price: hasRenewal ? price.trimmingCharacters(in: .whitespaces) : "",
@@ -332,7 +336,11 @@ struct AddSubscriptionView: View {
                         period: period,
                         monthlyLimit: kind.needsKey ? amount : nil
                     ), key: key.trimmingCharacters(in: .whitespacesAndNewlines))
-                    close()
+                    if let message {
+                        error = message
+                    } else {
+                        close()
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!valid)

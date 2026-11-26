@@ -194,6 +194,8 @@ struct WiFiModuleView: View {
                 LinkRow("Настройки Wi-Fi…") { SystemSettings.wifi.open() }
             }
         }
+        // Пароль относится к конкретной сети: при переключении поля ввода он не должен переезжать.
+        .onChange(of: model.passwordFor) { _, _ in password = "" }
     }
 
     @ViewBuilder private var list: some View {
@@ -205,8 +207,8 @@ struct WiFiModuleView: View {
         let shownKnown = known.filter { prefs.isOn(.wifiKnown) || $0.ssid == model.current || $0.ssid == model.busy }
         let other = model.networks.filter { !$0.known && $0.ssid != model.current }
         if let current = model.current, !known.contains(where: { $0.ssid == current }) {
-            // Сканирование ещё не дошло до текущей сети — показываем её по имени.
-            row(WiFiNetwork(ssid: current, rssi: -60, secured: true, known: true))
+            // Сканирование ещё не дошло до текущей сети — показываем её по имени, без выдуманного сигнала.
+            row(WiFiNetwork(ssid: current, rssi: 0, secured: true, known: true), showSignal: false)
         }
         ForEach(shownKnown) { row($0) }
         if model.current == nil && shownKnown.isEmpty && model.scanned && !model.locationDenied {
@@ -231,7 +233,7 @@ struct WiFiModuleView: View {
         }
     }
 
-    @ViewBuilder private func row(_ network: WiFiNetwork) -> some View {
+    @ViewBuilder private func row(_ network: WiFiNetwork, showSignal: Bool = true) -> some View {
         let isCurrent = network.ssid == model.current
         RowButton(action: { model.select(network) }) {
             IconDot(symbol: "wifi", active: isCurrent)
@@ -243,9 +245,11 @@ struct WiFiModuleView: View {
             if network.secured {
                 Image(systemName: "lock.fill").font(.caption2).foregroundStyle(Color.primary.opacity(0.65))
             }
-            Image(systemName: "wifi", variableValue: Double(WiFiLogic.bars(rssi: network.rssi)) / 4)
-                .font(.callout).foregroundStyle(.primary)
-                .accessibilityLabel("Сигнал \(WiFiLogic.bars(rssi: network.rssi)) из 4")
+            if showSignal {
+                Image(systemName: "wifi", variableValue: Double(WiFiLogic.bars(rssi: network.rssi)) / 4)
+                    .font(.callout).foregroundStyle(.primary)
+                    .accessibilityLabel("Сигнал \(WiFiLogic.bars(rssi: network.rssi)) из 4")
+            }
         }
         if model.passwordFor == network.ssid {
             HStack(spacing: 6) {

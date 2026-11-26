@@ -70,16 +70,54 @@ enum BarText: String, CaseIterable, Codable, Identifiable {
 final class Prefs {
     static let shared = Prefs()
 
+    /// Сохранённые настройки. Поля читаются по отдельности с дефолтами: новое поле не должно
+    /// обнулять остальные, а испорченное значение — ломать чтение всего набора.
     private struct Stored: Codable {
-        var layout = PanelLayout()
-        var collapsed: [String] = []
-        var options: [String: Bool] = [:]
-        var barText = BarText.none.rawValue
-        var barVPN = false
-        var barBattery = false
+        var layout: PanelLayout
+        var collapsed: [String]
+        var options: [String: Bool]
+        var barText: String
+        var barVPN: Bool
+        var barBattery: Bool
         /// Необязательное: в настройках версии 0.1.0 этого поля нет.
         var barAwake: Bool?
-        var hiddenCalendars: [String] = []
+        var hiddenCalendars: [String]
+
+        init(
+            layout: PanelLayout = PanelLayout(),
+            collapsed: [String] = [],
+            options: [String: Bool] = [:],
+            barText: String = BarText.none.rawValue,
+            barVPN: Bool = false,
+            barBattery: Bool = false,
+            barAwake: Bool? = nil,
+            hiddenCalendars: [String] = []
+        ) {
+            self.layout = layout
+            self.collapsed = collapsed
+            self.options = options
+            self.barText = barText
+            self.barVPN = barVPN
+            self.barBattery = barBattery
+            self.barAwake = barAwake
+            self.hiddenCalendars = hiddenCalendars
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            layout = (try? c.decodeIfPresent(PanelLayout.self, forKey: .layout)) ?? PanelLayout()
+            collapsed = (try? c.decodeIfPresent([String].self, forKey: .collapsed)) ?? []
+            options = (try? c.decodeIfPresent([String: Bool].self, forKey: .options)) ?? [:]
+            barText = (try? c.decodeIfPresent(String.self, forKey: .barText)) ?? BarText.none.rawValue
+            barVPN = (try? c.decodeIfPresent(Bool.self, forKey: .barVPN)) ?? false
+            barBattery = (try? c.decodeIfPresent(Bool.self, forKey: .barBattery)) ?? false
+            if let awake = try? c.decodeIfPresent(Bool.self, forKey: .barAwake) {
+                barAwake = awake
+            } else {
+                barAwake = nil
+            }
+            hiddenCalendars = (try? c.decodeIfPresent([String].self, forKey: .hiddenCalendars)) ?? []
+        }
     }
 
     private static let key = "prefs.v1"

@@ -163,16 +163,24 @@ final class StatsStoreTests: XCTestCase {
 
 final class FormattingTests: XCTestCase {
     func testBytes() {
-        XCTAssertEqual(ByteFormat.string(0), "0 КБ")
+        XCTAssertEqual(ByteFormat.string(0), "0 Б")
+        XCTAssertEqual(ByteFormat.string(999), "999 Б")
+        XCTAssertEqual(ByteFormat.string(1_000), "1 КБ")
         XCTAssertEqual(ByteFormat.string(512_000), "512 КБ")
         XCTAssertEqual(ByteFormat.string(27_900_000), "27,9 МБ")
         XCTAssertEqual(ByteFormat.string(1_400_000_000), "1,4 ГБ")
+        // Границы единиц: округление не должно давать «1000 КБ» и «1000,0 МБ».
+        XCTAssertEqual(ByteFormat.string(999_999), "1,0 МБ")
+        XCTAssertEqual(ByteFormat.string(1_000_000), "1,0 МБ")
+        XCTAssertEqual(ByteFormat.string(999_999_999), "1,0 ГБ")
     }
 
     func testDurations() {
         XCTAssertEqual(DurationFormat.clock(754), "00:12:34")
         XCTAssertEqual(DurationFormat.clock(36_000 + 61), "10:01:01")
         XCTAssertEqual(DurationFormat.short(5100), "1 ч 25 мин")
+        XCTAssertEqual(DurationFormat.short(3600), "1 ч")
+        XCTAssertEqual(DurationFormat.short(7200), "2 ч")
         XCTAssertEqual(DurationFormat.short(59), "0 мин")
         XCTAssertEqual(DurationFormat.short(1500), "25 мин")
     }

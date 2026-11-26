@@ -6,7 +6,9 @@ import SinComboCore
 enum Keychain {
     private static let service = "com.claudesiniakov.sincombo.apikey"
 
-    static func set(_ secret: String, account: String) {
+    /// - Returns: статус связки ключей; ошибку показываем в форме, а не теряем.
+    @discardableResult
+    static func set(_ secret: String, account: String) -> OSStatus {
         delete(account: account)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -14,7 +16,7 @@ enum Keychain {
             kSecAttrAccount as String: account,
             kSecValueData as String: Data(secret.utf8),
         ]
-        SecItemAdd(query as CFDictionary, nil)
+        return SecItemAdd(query as CFDictionary, nil)
     }
 
     static func get(account: String) -> String? {
@@ -190,13 +192,19 @@ final class SubsModel {
 
     var hasRemote: Bool { subs.contains { $0.kind != .manual } }
 
-    func add(_ sub: Subscription, key: String?) {
-        subs.append(sub)
+    /// - Returns: текст ошибки, если ключ не удалось сохранить; `nil` — подписка добавлена.
+    @discardableResult
+    func add(_ sub: Subscription, key: String?) -> String? {
         if sub.kind.needsKey, let key, !key.isEmpty {
-            Keychain.set(key, account: sub.id.uuidString)
+            let status = Keychain.set(key, account: sub.id.uuidString)
+            guard status == errSecSuccess else {
+                return "Не удалось сохранить ключ в связке ключей (код \(status))."
+            }
         }
+        subs.append(sub)
         save()
         refresh()
+        return nil
     }
 
     func remove(_ sub: Subscription) {

@@ -65,6 +65,8 @@ final class VPNModel {
         return base.appendingPathComponent("SinCombo/vpn-stats.json")
     }()
 
+    private static let idleRefreshSeconds = 30
+
     func start() {
         guard !started else { return }
         store = StatsStore.load(from: Self.statsURL)
@@ -73,6 +75,8 @@ final class VPNModel {
             Task { @MainActor in AppState.shared.vpn.kick() }
         }
         started = true
+        // Первый опрос — на ближайшем тике, а не через полминуты: значок в строке меню не должен ждать.
+        secondsSinceRefresh = Self.idleRefreshSeconds
     }
 
     // MARK: - Опрос
@@ -87,11 +91,11 @@ final class VPNModel {
     }
 
     /// Вызывается раз в секунду из AppState: решает, пора ли опрашивать систему. Панель открыта или идёт переключение —
-    /// каждую секунду; иначе раз в 5 с плюс мгновенное обновление по уведомлениям сети.
+    /// каждую секунду; иначе раз в 30 с как страховка, а изменения сети приходят мгновенно по SCDynamicStore.
     func tick() async {
         guard started else { return }
         secondsSinceRefresh += 1
-        let period = (panelOpen || isTransitional) ? 1 : 5
+        let period = (panelOpen || isTransitional) ? 1 : Self.idleRefreshSeconds
         if secondsSinceRefresh >= period { await refresh() }
 
         if isTransitional {
@@ -241,9 +245,10 @@ final class VPNModel {
         let counters = InterfaceReader.counters().filter { interfaces.contains($0.key) }
         let delta = meter.sample(counters)
 
-        // Время между замерами; большой разрыв (сон Mac) не засчитывается.
+        // Время между замерами; большой разрыв (сон Mac) не засчитывается. Порог с запасом:
+        // с закрытой панелью замеры идут раз в 30 с, и небольшое опоздание таймера — не сон.
         var elapsed = lastSample.map { now.timeIntervalSince($0) } ?? 0
-        if elapsed < 0 || elapsed > 30 { elapsed = 0 }
+        if elapsed < 0 || elapsed > 120 { elapsed = 0 }
         lastSample = now
 
         guard elapsed > 0 || delta != InterfaceCounters() else { return }
