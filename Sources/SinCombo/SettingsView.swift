@@ -282,6 +282,7 @@ struct AddSubscriptionView: View {
         case .claudeCode: return "Claude"
         case .anthropicAPI: return "Anthropic API"
         case .openAIAPI: return "OpenAI API"
+        case .deepSeek: return "DeepSeek"
         }
     }
 
@@ -300,9 +301,15 @@ struct AddSubscriptionView: View {
                 }
                 TextField("Название", text: $name, prompt: Text(defaultName.isEmpty ? "Например, ChatGPT Plus" : defaultName))
                 if kind.needsKey {
-                    SecureField("Ключ администратора", text: $key)
-                    TextField("Лимит в месяц, $", text: $limit, prompt: Text("необязательно"))
+                    SecureField(kind.supportsMonthlyLimit ? "Ключ администратора" : "Ключ API", text: $key)
+                    if kind.supportsMonthlyLimit {
+                        TextField("Лимит в месяц, $", text: $limit, prompt: Text("необязательно"))
+                    }
                     Text("Ключ сохраняется в связке ключей macOS и передаётся только самому сервису.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if kind == .deepSeek {
+                    Text("DeepSeek отдаёт остаток на счёте, а не расход за месяц: карточка покажет баланс и его состав.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if kind == .claudeCode {
@@ -334,7 +341,7 @@ struct AddSubscriptionView: View {
                         price: hasRenewal ? price.trimmingCharacters(in: .whitespaces) : "",
                         renewal: hasRenewal ? renewal : nil,
                         period: period,
-                        monthlyLimit: kind.needsKey ? amount : nil
+                        monthlyLimit: kind.supportsMonthlyLimit ? amount : nil
                     ), key: key.trimmingCharacters(in: .whitespacesAndNewlines))
                     if let message {
                         error = message

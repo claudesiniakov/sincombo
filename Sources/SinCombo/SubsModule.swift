@@ -139,6 +139,17 @@ enum UsageFetcher {
         return costLimit(total, limit: limit)
     }
 
+    /// Баланс DeepSeek: сервис отдаёт остаток, а не расход за месяц.
+    static func deepSeek(key: String) async throws -> [UsageLimit] {
+        var request = URLRequest(url: URL(string: "https://api.deepseek.com/user/balance")!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let data = try await load(request)
+        guard let limits = UsageParsers.deepSeekBalance(data) else {
+            throw UsageFailure(text: "сервис ответил в неизвестном формате")
+        }
+        return limits
+    }
+
     static func openAI(key: String, limit: Double?) async throws -> [UsageLimit] {
         var total = 0.0
         var page: String?
@@ -231,13 +242,18 @@ final class SubsModel {
                     switch sub.kind {
                     case .claudeCode:
                         result = try await UsageFetcher.claude()
-                    case .anthropicAPI, .openAIAPI:
+                    case .anthropicAPI, .openAIAPI, .deepSeek:
                         guard let key = Keychain.get(account: sub.id.uuidString) else {
                             throw UsageFailure(text: "ключ не найден в связке ключей — добавьте подписку заново")
                         }
-                        result = sub.kind == .anthropicAPI
-                            ? try await UsageFetcher.anthropic(key: key, limit: sub.monthlyLimit)
-                            : try await UsageFetcher.openAI(key: key, limit: sub.monthlyLimit)
+                        switch sub.kind {
+                        case .anthropicAPI:
+                            result = try await UsageFetcher.anthropic(key: key, limit: sub.monthlyLimit)
+                        case .openAIAPI:
+                            result = try await UsageFetcher.openAI(key: key, limit: sub.monthlyLimit)
+                        default:
+                            result = try await UsageFetcher.deepSeek(key: key)
+                        }
                     case .manual:
                         continue
                     }
@@ -302,7 +318,8 @@ struct SubsModuleView: View {
 
     private var status: String {
         if model.loading { return "Обновление…" }
-        if let date = model.lastUpdate { return "Обновлено в " + Self.time.string(from: date) }
+        // Время запроса, а не успеха: карточки ниже показывают, что именно удалось получить.
+        if let date = model.lastUpdate { return "Проверено в " + Self.time.string(from: date) }
         return "Ещё не обновлялось"
     }
 

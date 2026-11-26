@@ -190,5 +190,30 @@ final class SubscriptionTests: XCTestCase {
         XCTAssertFalse(token.expired)
         XCTAssertNil(UsageParsers.claudeCodeToken(Data("{}".utf8), now: now))
         XCTAssertEqual(MoneyFormat.usd(12.4), "12,40 $")
+        XCTAssertEqual(MoneyFormat.amount(12.4), "12,40")
+        XCTAssertEqual(MoneyFormat.amount(110), "110,00")
+    }
+
+    func testDeepSeekBalance() throws {
+        let json = #"""
+        {"is_available":true,"balance_infos":[
+          {"currency":"CNY","total_balance":"110.00","granted_balance":"10.00","topped_up_balance":"100.00"},
+          {"currency":"USD","total_balance":"5.50","granted_balance":"0.00","topped_up_balance":"5.50"}]}
+        """#
+        let limits = try XCTUnwrap(UsageParsers.deepSeekBalance(Data(json.utf8)))
+        XCTAssertEqual(limits.map(\.title), ["Баланс, CNY", "Баланс, USD"])
+        XCTAssertNil(limits[0].fraction)
+        XCTAssertEqual(limits[0].caption, "110,00 CNY · оплачено 100,00 · бонусы 10,00")
+        // Нулевые части не показываем: у USD нет бонусов.
+        XCTAssertEqual(limits[1].caption, "5,50 USD · оплачено 5,50")
+        XCTAssertNil(UsageParsers.deepSeekBalance(Data("{}".utf8)))
+        XCTAssertNil(UsageParsers.deepSeekBalance(Data("не json".utf8)))
+    }
+
+    func testDeepSeekUnavailable() throws {
+        let json = #"{"is_available":false,"balance_infos":[{"currency":"CNY","total_balance":"0.00","granted_balance":"0.00","topped_up_balance":"0.00"}]}"#
+        let limits = try XCTUnwrap(UsageParsers.deepSeekBalance(Data(json.utf8)))
+        XCTAssertEqual(limits.map(\.title), ["Баланс, CNY", "Состояние"])
+        XCTAssertEqual(limits[1].caption, "баланса не хватает для запросов")
     }
 }

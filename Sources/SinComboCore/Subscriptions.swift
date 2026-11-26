@@ -10,6 +10,8 @@ public enum SubscriptionKind: String, Codable, Sendable, CaseIterable, Identifia
     case anthropicAPI
     /// Расход OpenAI API за месяц (ключ администратора).
     case openAIAPI
+    /// Баланс DeepSeek API (ключ).
+    case deepSeek
 
     public var id: String { rawValue }
 
@@ -19,6 +21,7 @@ public enum SubscriptionKind: String, Codable, Sendable, CaseIterable, Identifia
         case .claudeCode: return "Подписка Claude (вход Claude Code)"
         case .anthropicAPI: return "Anthropic API (ключ)"
         case .openAIAPI: return "OpenAI API (ключ)"
+        case .deepSeek: return "DeepSeek API (ключ)"
         }
     }
 
@@ -26,11 +29,14 @@ public enum SubscriptionKind: String, Codable, Sendable, CaseIterable, Identifia
         switch self {
         case .manual: return "вручную"
         case .claudeCode: return "вход Claude Code"
-        case .anthropicAPI, .openAIAPI: return "ключ API"
+        case .anthropicAPI, .openAIAPI, .deepSeek: return "ключ API"
         }
     }
 
-    public var needsKey: Bool { self == .anthropicAPI || self == .openAIAPI }
+    public var needsKey: Bool { self == .anthropicAPI || self == .openAIAPI || self == .deepSeek }
+
+    /// Месячный лимит расхода есть только у сервисов, которые отдают расход за месяц.
+    public var supportsMonthlyLimit: Bool { self == .anthropicAPI || self == .openAIAPI }
 }
 
 public enum BillingPeriod: String, Codable, Sendable, CaseIterable, Identifiable {
@@ -152,6 +158,31 @@ public enum UsageParsers {
         return (usd, more ? root["next_page"] as? String : nil)
     }
 
+    /// Ответ `GET /user/balance` (DeepSeek): остаток в валюте и доступность запросов.
+    /// Строки вида «110.00», поэтому числа разбираются и из строки, и из JSON-числа.
+    public static func deepSeekBalance(_ data: Data) -> [UsageLimit]? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let infos = root["balance_infos"] as? [[String: Any]] else { return nil }
+        var limits: [UsageLimit] = []
+        for info in infos {
+            guard let total = number(info["total_balance"]) else { continue }
+            let currency = (info["currency"] as? String)?.uppercased() ?? "CNY"
+            var caption = MoneyFormat.amount(total) + " " + currency
+            if let topped = number(info["topped_up_balance"]), topped > 0 {
+                caption += " · оплачено " + MoneyFormat.amount(topped)
+            }
+            if let granted = number(info["granted_balance"]), granted > 0 {
+                caption += " · бонусы " + MoneyFormat.amount(granted)
+            }
+            limits.append(UsageLimit(title: "Баланс, " + currency, fraction: nil, caption: caption))
+        }
+        guard !limits.isEmpty else { return nil }
+        if root["is_available"] as? Bool == false {
+            limits.append(UsageLimit(title: "Состояние", fraction: nil, caption: "баланса не хватает для запросов"))
+        }
+        return limits
+    }
+
     /// Лимиты подписки Claude: окна `five_hour`, `seven_day` и подобные с полями
     /// `utilization` (проценты) и `resets_at`.
     public static func claudeLimits(_ data: Data, now: Date) -> [UsageLimit]? {
@@ -192,6 +223,15 @@ public enum UsageParsers {
         return (token, expired)
     }
 
+    static func number(_ raw: Any?) -> Double? {
+        if let text = raw as? String {
+            return Double(text.replacingOccurrences(of: ",", with: "."))
+        }
+        if let value = raw as? Double { return value }
+        if let value = raw as? Int { return Double(value) }
+        return nil
+    }
+
     static func parseDate(_ text: String) -> Date? {
         let full = ISO8601DateFormatter()
         full.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -213,8 +253,13 @@ public enum UsageParsers {
 }
 
 public enum MoneyFormat {
+    /// «12,40»
+    public static func amount(_ value: Double) -> String {
+        String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
+    }
+
     /// «12,40 $»
     public static func usd(_ value: Double) -> String {
-        String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",") + " $"
+        amount(value) + " $"
     }
 }
