@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # Токен не остаётся в .git/config: этот job исполняет код ветки.
+          persist-credentials: false
 
       - name: Toolchain
         run: |
@@ -25,11 +27,43 @@ jobs:
           sw_vers
           swift --version
 
+      # Скрипт сборки — тоже код: ловим синтаксис до того, как он сломает релиз.
+      - name: Scripts
+        run: bash -n scripts/build-app.sh
+
       - name: Build
         run: swift build -c release
 
       - name: Test
         run: swift test
+
+      # Постоянный самоподписанный сертификат: подпись одинакова от версии к версии, поэтому
+      # обновление принимается только от него, а разрешения TCC переживают обновление.
+      # В pull_request секретов нет и подпись ad-hoc — ключ рядом с кодом из форка не появляется.
+      - name: Signing certificate
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          SIGNING_P12: ${{ secrets.SIGNING_P12 }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_P12" ]; then
+            echo "Сертификата нет — подпись ad-hoc, привязки обновления к сертификату не будет"
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$SIGNING_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 300 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/signing.p12" -k "$KEYCHAIN" -P "$SIGNING_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          HASH="$(security find-certificate -a -Z "$KEYCHAIN" | sed -n 's/.*SHA-1 hash: \([0-9A-F]\{40\}\).*/\1/p' | head -1)"
+          test -n "$HASH"
+          echo "SIGN_IDENTITY=$HASH" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       - name: Package SinCombo.app
         run: ./scripts/build-app.sh

@@ -229,8 +229,13 @@ final class Updater {
 
             UpdateLog.write("Распаковка и проверка подписи")
             let bundleID = Bundle.main.bundleIdentifier
+            // Отпечатки сертификата, которым подписано установленное приложение: обновление
+            // должно быть подписано им же. У ad-hoc сборки отпечатков нет — привязки не будет.
+            let allowedSigners = SigningIdentity.leafHashes(of: Self.installURL) + SigningIdentity.extraLeafHashes
             let newApp = try await Self.background { try Self.unpack(archive: archive, in: work) }
-            try await Self.background { try Self.verify(newApp: newApp, expected: release.version, bundleID: bundleID) }
+            try await Self.background {
+                try Self.verify(newApp: newApp, expected: release.version, bundleID: bundleID, allowedSigners: allowedSigners)
+            }
 
             state = .installing(release)
             beforeRestart()
@@ -304,7 +309,9 @@ final class Updater {
         return newApp
     }
 
-    nonisolated private static func verify(newApp: URL, expected: AppVersion, bundleID: String?) throws {
+    nonisolated private static func verify(
+        newApp: URL, expected: AppVersion, bundleID: String?, allowedSigners: [String]
+    ) throws {
         guard let info = NSDictionary(contentsOf: newApp.appendingPathComponent("Contents/Info.plist")),
               info["CFBundleIdentifier"] as? String == bundleID else {
             throw UpdateError("Архив содержит другое приложение")
@@ -313,7 +320,21 @@ final class Updater {
         guard version == expected else {
             throw UpdateError("Версия в архиве (\(version?.description ?? "?")) не совпадает с релизом \(expected)")
         }
-        try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", newApp.path])
+        // `--deep` не нужен: вложенного кода в бандле нет, проверка идёт по всему содержимому.
+        if let requirement = SigningIdentity.requirement(for: allowedSigners) {
+            UpdateLog.write("Подпись обновления сверяется с сертификатом установленного приложения")
+            do {
+                try run("/usr/bin/codesign", ["--verify", "--strict", "-R=\(requirement)", newApp.path])
+            } catch {
+                throw UpdateError(
+                    "Обновление подписано не тем сертификатом, что установленное приложение. "
+                        + "Установка отменена: скачайте архив со страницы релизов вручную."
+                )
+            }
+        } else {
+            UpdateLog.write("Установленное приложение подписано ad-hoc: привязки к сертификату нет")
+            try run("/usr/bin/codesign", ["--verify", "--strict", newApp.path])
+        }
         _ = try? run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", newApp.path])
     }
 

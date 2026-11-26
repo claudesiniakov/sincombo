@@ -66,9 +66,31 @@ cat > build/SinCombo.entitlements <<ENT
 </dict>
 </plist>
 ENT
-codesign --force --deep --options runtime --entitlements build/SinCombo.entitlements --sign - "$APP"
+# Постоянный сертификат (CI передаёт SIGN_IDENTITY и SIGNING_KEYCHAIN) делает подпись одинаковой
+# от версии к версии: обновление принимается только от него, а разрешения TCC переживают обновление.
+# Без сертификата подпись ad-hoc — и привязки к сертификату в обновлении не будет.
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+SIGN_KEYCHAIN_ARGS=()
+if [ -n "${SIGNING_KEYCHAIN:-}" ]; then
+  SIGN_KEYCHAIN_ARGS=(--keychain "$SIGNING_KEYCHAIN")
+fi
+# В синхронизируемых папках (iCloud/Documents) на файлах висят xattr, и codesign на них падает.
+xattr -cr "$APP"
+codesign --force --options runtime --timestamp=none --entitlements build/SinCombo.entitlements \
+  --sign "$SIGN_IDENTITY" ${SIGN_KEYCHAIN_ARGS[@]+"${SIGN_KEYCHAIN_ARGS[@]}"} "$APP"
 rm build/SinCombo.entitlements
-codesign --verify --verbose "$APP"
+codesign --verify --strict "$APP"
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  echo "Подпись ad-hoc: привязки обновления к сертификату нет"
+else
+  # Привязка к сертификату — то, на чём держится проверка обновления: без неё подпись бесполезна.
+  REQUIREMENT="$(codesign -d -r- "$APP" 2>&1 || true)"
+  if ! printf '%s' "$REQUIREMENT" | grep -q "certificate leaf"; then
+    echo "Подпись не привязана к сертификату: $REQUIREMENT" >&2
+    exit 1
+  fi
+  echo "Подпись сертификатом ${SIGN_IDENTITY}"
+fi
 
 ditto -c -k --keepParent "$APP" build/SinCombo.zip
 # Контрольная сумма для проверки обновления внутри приложения.
