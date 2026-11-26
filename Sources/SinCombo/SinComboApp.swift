@@ -65,6 +65,7 @@ final class AppState {
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var seconds = 0
     @ObservationIgnored private var lastUpdatePoll = Date.distantPast
+    @ObservationIgnored private var lastBarText = BarText.none
 
     func start() {
         guard loop == nil else { return }
@@ -74,7 +75,9 @@ final class AppState {
         sound.start()
         battery.start()
         calendar.start()
-        if needsCalendarEvents { calendar.activate(wantEvents: false); calendar.reload() }
+        lastBarText = prefs.barText
+        // Доступ запрашивается и тогда, когда события нужны только строке меню.
+        if needsCalendarEvents { calendar.activate(wantEvents: true) }
         loop = Task {
             while !Task.isCancelled {
                 await self.tick()
@@ -113,7 +116,10 @@ final class AppState {
         if enabled(.sound) { sound.reload() }
         if enabled(.battery) || prefs.barBattery || prefs.barText == .battery { battery.reload() }
         if first {
-            if enabled(.calendar) { calendar.activate(wantEvents: prefs.isOn(.calEvents)) }
+            // События нужны и для строки меню, даже если блок «Календарь» выключен.
+            if enabled(.calendar) || prefs.barText == .nextEvent {
+                calendar.activate(wantEvents: prefs.isOn(.calEvents) || prefs.barText == .nextEvent)
+            }
             if enabled(.subs) { subs.refreshIfDue() }
         }
     }
@@ -132,16 +138,24 @@ final class AppState {
 
         seconds += 1
         if panelOpen {
-            if seconds % 3 == 0 { refreshModules(first: false) }
-            // Сканирование сетей — раз в 10 секунд, пока модуль развёрнут.
-            if seconds % 10 == 0, enabled(.wifi), !prefs.collapsed.contains(.wifi) { wifi.refresh() }
+            if seconds % 5 == 0 { refreshModules(first: false) }
+            // Активное сканирование сетей — раз в 30 секунд, пока блок Wi-Fi развёрнут:
+            // чаще незачем, а радиосеть на каждом скане заметно расходует заряд.
+            if seconds % 30 == 0, enabled(.wifi), !prefs.collapsed.contains(.wifi) { wifi.refresh() }
+        }
+
+        // Настройку могли сменить в «Настройках»: тогда «Ближайшему событию» нужен доступ.
+        if lastBarText != prefs.barText {
+            lastBarText = prefs.barText
+            if needsCalendarEvents { calendar.activate(wantEvents: true) }
         }
 
         let now = Date()
         let currentMinute = Int(now.timeIntervalSince1970 / 60)
         if minute != currentMinute {
             minute = currentMinute
-            calendar.dayChanged()
+            // После полуночи события соседнего дня надо перечитать, а не ждать открытия панели.
+            if calendar.dayChanged(), needsCalendarEvents { calendar.reload() }
         }
         if now.timeIntervalSince(lastUpdatePoll) >= 3600 {
             lastUpdatePoll = now

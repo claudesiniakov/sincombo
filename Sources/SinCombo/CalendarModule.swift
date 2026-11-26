@@ -79,16 +79,18 @@ final class CalendarModel {
         }
     }
 
-    func dayChanged() {
+    /// - Returns: сменились ли сутки — по этому признаку вызывающий решает, перезагружать ли события.
+    @discardableResult
+    func dayChanged() -> Bool {
         let now = Date()
-        if !calendar.isDate(now, inSameDayAs: today) {
+        let changed = !calendar.isDate(now, inSameDayAs: today)
+        if changed, calendar.isDate(selected, inSameDayAs: today) {
             // После полуночи выбранный «сегодняшний» день едет вместе с датой.
-            if calendar.isDate(selected, inSameDayAs: today) {
-                selected = now
-                month = now
-            }
+            selected = now
+            month = now
         }
         today = now
+        return changed
     }
 
     func reload() {
@@ -197,11 +199,16 @@ final class CalendarModel {
     }
 
     func addEvent(title: String, start: Date, end: Date, allDay: Bool, calendarID: String?) -> Bool {
+        // «Весь день» кончается в полночь следующего дня: конец у EventKit исключающий.
+        guard let times = EventTimes.bounds(start: start, end: end, allDay: allDay, calendar: calendar) else {
+            saveError = "Конец события должен быть позже начала."
+            return false
+        }
         let event = EKEvent(eventStore: store)
         event.title = title
         event.isAllDay = allDay
-        event.startDate = allDay ? calendar.startOfDay(for: start) : start
-        event.endDate = allDay ? calendar.startOfDay(for: start) : max(end, start)
+        event.startDate = times.start
+        event.endDate = times.end
         event.calendar = calendarID.flatMap { store.calendar(withIdentifier: $0) } ?? store.defaultCalendarForNewEvents
         guard event.calendar != nil else {
             saveError = "Нет календаря, в который можно записать событие."
@@ -439,6 +446,10 @@ struct CalendarModuleView: View {
                     ForEach(model.writableCalendars) { Text($0.title).tag($0.id) }
                 }
             }
+            // Форма не даёт сохранить событие с концом раньше начала: модель такое отвергает.
+            if !newAllDay && newEnd <= newStart {
+                Text("Конец должен быть позже начала.").font(.caption).foregroundStyle(.red)
+            }
             if let error = model.saveError {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
@@ -456,6 +467,7 @@ struct CalendarModuleView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
+                .disabled(!newAllDay && newEnd <= newStart)
             }
         }
         .controlSize(.small)
